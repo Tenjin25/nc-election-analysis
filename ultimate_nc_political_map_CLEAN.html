@@ -1,8 +1,12 @@
 <!DOCTYPE html>
 <html>
 <head>
+    <script src='https://api.mapbox.com/mapbox-gl-js/v3.0.1/mapbox-gl.js'></script>
+    <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6.5.0/turf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6.5.0/turf.min.js"></script>
+    <script src='scripts/common.js'></script>
     <meta charset='utf-8'>
-    <title>Ultimate NC Political Realignment Map (2008-2024)</title>
+    <title>NC Political Realignment Map (2008-2024)</title>
     <meta name='viewport' content='initial-scale=1,maximum-scale=1,user-scalable=no'>
     <meta property="og:title" content="NC Political Realignment Map (2008-2024)">
     <meta property="og:description" content="Interactive visualization of North Carolina's political trends from 2008 to 2024, showing county-level and precinct-level voting patterns.">
@@ -13,24 +17,92 @@
     <link href='styles/common.css' rel='stylesheet'>
     <script src='scripts/common.js'></script>
     <style>
+        html, body {
+  height: 100vh;
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+body {
+  display: flex;
+  flex-direction: row;
+  height: 100vh;
+  width: 100vw;
+  margin: 0;
+  padding: 0;
+}
+#map {
+  flex: 1 1 auto;
+  position: relative;
+  min-height: 0;
+  height: 100vh;
+  width: 100%;
+  background: #f0f4f8;
+}
+.sidebar {
+  position: relative;
+  width: 400px;
+  height: 100vh;
+  background: #fff;
+  box-shadow: -2px 0 10px rgba(0,0,0,0.1);
+  border-left: 1px solid #e5e7eb;
+  overflow-y: auto;
+  z-index: 1002;
+  transition: width 0.3s cubic-bezier(.4,0,.2,1);
+}
+.sidebar.minimized {
+  width: 0 !important;
+  min-width: 0 !important;
+  max-width: 0 !important;
+  overflow: hidden !important;
+}
+.sidebar.minimized .sidebar-content {
+  display: none;
+}
+.sidebar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px;
+  border-bottom: 1px solid #e5e7eb;
+  background: #f9fafb;
+}
+.minimize-btn {
+  background: #e5e7eb;
+  border: none;
+  border-radius: 6px;
+  width: 30px;
+  height: 30px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  transition: background-color 0.2s;
+}
+.minimize-btn:hover {
+  background: #d1d5db;
+}
+
         body { 
             margin: 0; 
             padding: 0; 
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
         
-        #map { 
-            position: absolute; 
-            top: 0; 
-            bottom: 0; 
-            left: 0;
-            right: 400px; /* Leave space for sidebar */
-            transition: right 0.3s ease;
+        #swingCanvas {
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          pointer-events: none;
+          z-index: 1000;
         }
         
         #map.sidebar-minimized {
-            right: 0px; /* Minimized sidebar width */
-        }
+  width: 100vw !important;
+}
         
         /* Main Controls */
         .main-controls {
@@ -76,7 +148,7 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 14px;
+            font-size: 18px;
             transition: background-color 0.2s;
         }
         
@@ -137,46 +209,27 @@
             box-shadow: -2px 0 10px rgba(0,0,0,0.1);
             overflow-y: auto;
             z-index: 1000;
-            transition: all 0.3s ease;
+            transition: transform 0.3s cubic-bezier(.4,0,.2,1);
+            transform: translateX(0);
         }
         
         .sidebar.minimized {
-            transform: translateX(100%) !important;
-            visibility: hidden !important;
-        }
-        
-        /* Ensure no gray background when sidebar is minimized */
-        body.sidebar-minimized {
-            overflow-x: hidden !important;
-        }
-        
-        /* Force map to extend fully when sidebar minimized */
-        body.sidebar-minimized #map {
-            position: fixed !important;
-            top: 0 !important;
-            left: 0 !important;
-            right: 0 !important;
-            bottom: 0 !important;
-            width: 100vw !important;
-            height: 100vh !important;
-            z-index: 0 !important;
+            transform: translateX(100%);
+            pointer-events: none;
+            opacity: 0;
         }
         
         .sidebar.minimized .sidebar-content {
             display: none;
         }
         
-        .sidebar.minimized .sidebar-header h3 {
-            display: none;
-        }
-        
         .sidebar-header {
-            padding: 20px;
-            border-bottom: 1px solid #e5e7eb;
-            background: #f9fafb;
             display: flex;
             justify-content: space-between;
             align-items: center;
+            padding: 20px;
+            border-bottom: 1px solid #e5e7eb;
+            background: #f9fafb;
         }
         
         .sidebar.minimized .sidebar-header {
@@ -546,29 +599,49 @@
             font-size: 14px;
             margin-bottom: 10px;
         }
+
+/* Sidebar minimized: fully hidden except floating expand button */
+.sidebar.minimized {
+    width: 0 !important;
+    min-width: 0 !important;
+    max-width: 0 !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+    overflow: hidden !important;
+}
+.sidebar.minimized .sidebar-header,
+.sidebar.minimized .sidebar-content {
+    display: none !important;
+}
+
+/* Show floating expand button when sidebar is minimized */
+.sidebar.minimized ~ .floating-expand-btn {
+    display: flex !important;
+}
+.floating-expand-btn {
+    display: none;
+}
     </style>
 </head>
 <body>
     <div id="share-container" style="position: fixed; top: 20px; right: 440px; z-index: 1000;"></div>
-    <div id="map"></div>
-    <div id="loading" class="loading-overlay" style="display: none;">
-        <div class="spinner"></div>
+    <div id="map" style="position:relative;width:100%;height:100%;">
+        <canvas id="swingCanvas" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:1000;"></canvas>
     </div>
-    <div id="progress" class="progress-bar">
-        <div class="fill"></div>
+
+    <!-- Sidebar for County Details and Research Findings -->
+
+<!-- Main Controls Dropdown (Contest Selector) -->
+<div class="main-controls" id="main-controls">
+    <div class="controls-header">
+        <h3>🗳️ NC Political Categories</h3>
+        <button class="minimize-btn" onclick="toggleMainControls()" id="controls-minimize-btn">−</button>
     </div>
-    
-    <div class="main-controls" id="main-controls">
-        <div class="controls-header">
-            <h3>🗳️ NC Political Categories</h3>
-            <button class="minimize-btn" onclick="toggleMainControls()" id="controls-minimize-btn">−</button>
+    <div class="controls-content" id="controls-content">
+        <div class="analysis-mode">
+            <div class="mode-toggle active" id="county-mode" onclick="setMode('county')">County Results</div>
+            <div class="mode-toggle" id="precinct-mode" onclick="setMode('precinct')">Precinct Patterns</div>
         </div>
-        <div class="controls-content" id="controls-content">
-            <div class="analysis-mode">
-                <div class="mode-toggle active" id="county-mode" onclick="setMode('county')">County Results</div>
-                <div class="mode-toggle" id="precinct-mode" onclick="setMode('precinct')">Precinct Patterns</div>
-            </div>
-        
         <div class="control-group">
             <label>📊 Contest Type:</label>
             <select id="contest" onchange="applyCategories()">
@@ -632,30 +705,24 @@
                 <option value="state_auditor_2024_1">State Auditor (2024)</option>
             </select>
         </div>
-        
         <button onclick="applyCategories()" class="btn-primary">
             🎨 Apply Political Categories
         </button>
-        
         <button onclick="resetView()" class="btn-secondary">
             🔄 Reset View
         </button>
-        
         <button onclick="toggleLabels()" class="btn-success">
             🏷️ Toggle County Labels
         </button>
-        
         <button onclick="togglePrecinctsLayer()" class="btn-warning">
             📍 Toggle Precincts
         </button>
-        
         <div class="control-group" style="margin-top: 15px;">
             <label>🔍 Quick Analysis:</label>
             <button onclick="showSwingCounties()" class="btn-secondary" style="font-size: 12px;">
                 Find Swing Counties
             </button>
         </div>
-
         <div class="control-group">
             <label>🔄 Compare to Previous:</label>
             <select id="compare-election" onchange="showSwingArrows()">
@@ -677,106 +744,186 @@
         </div>
         </div> <!-- End controls-content -->
     </div>
-    
-    <!-- Sidebar for County Details and Research Findings -->
-    <div class="sidebar" id="sidebar">
-        <div class="sidebar-header">
-            <h3>📊 County Analysis</h3>
-            <button class="minimize-btn" onclick="toggleSidebar()" id="sidebar-minimize-btn">−</button>
+
+<!-- Sidebar for County Details and Research Findings -->
+<div class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+        <h3>📊 County Analysis</h3>
+        <button class="minimize-btn" onclick="toggleSidebar()" id="sidebar-minimize-btn">−</button>
+    </div>
+    <div class="sidebar-content">
+        <!-- County Details Sidebar: moved above statewide margin -->
+        <div class="county-details" id="county-details" style="display: none;">
+          <h4 id="county-name">Select a County</h4>
+          <div id="county-info-content">
+            Click on any county to see detailed election results and competitiveness analysis.
+          </div>
         </div>
-        <div class="sidebar-content">
-            <!-- County Details Sidebar: moved above statewide margin -->
-            <div class="county-details" id="county-details" style="display: none;">
-              <h4 id="county-name">Select a County</h4>
-              <div id="county-info-content">
-                Click on any county to see detailed election results and competitiveness analysis.
-              </div>
+        <div style="margin-bottom: 16px;">
+            <label for="county-search" style="font-weight:600;">Search County:</label>
+            <input type="text" id="county-search" placeholder="Type to search..." style="width:100%;padding:8px;border-radius:6px;margin-top:6px;margin-bottom:6px;" />
+        </div>
+        <div class="statewide-results" id="statewide-results">
+            <h4>🏛️ North Carolina Statewide</h4>
+            <div id="statewide-content">
+                <p>Select a contest to see statewide results and margin.</p>
             </div>
-            <div style="margin-bottom: 16px;">
-                <label for="county-search" style="font-weight:600;">Search County:</label>
-                <input type="text" id="county-search" placeholder="Type to search..." style="width:100%;padding:8px;border-radius:6px;margin-top:6px;margin-bottom:6px;" />
+        </div>
+        <!-- Research Findings -->
+        <div class="findings-section">
+            <h4>🔍 Research Findings</h4>
+            <div class="finding-card">
+                <h5>Cabarrus County - Suburban Shift</h5>
+                <p><strong>Competitive Trend:</strong> While still leaning Republican, Cabarrus has become significantly more competitive. <span class="metric">2020: R+9.4%</span> → <span class="metric">2024: R+7.7%</span></p>
+                <p><strong>2020 Breakthrough:</strong> Trump 53.94% vs Biden 44.50% - first time since 2008 a Democrat cracked 40%</p>
+                <p><strong>2024 Continuation:</strong> Trump 53.03% vs Harris 45.34%, maintaining the competitive trend</p>
+                <p><strong>Demographics:</strong> Unaffiliated registration now surpasses both major parties. Fast-growing communities: Concord, Kannapolis, Harrisburg</p>
+                <p><strong>Geography:</strong> Charlotte metro spillover driving suburban growth and political transformation</p>
             </div>
-            <div class="statewide-results" id="statewide-results">
-                <h4>🏛️ North Carolina Statewide</h4>
-                <div id="statewide-content">
-                    <p>Select a contest to see statewide results and margin.</p>
-                </div>
+            <div class="finding-card">
+                <h5>Alamance County - Statistical Consistency</h5>
+                <p><strong>Competitive Trend:</strong> Steady competitiveness with remarkably consistent Democratic performance. <span class="metric">2020: R+8.4%</span> → <span class="metric">2024: R+8.1%</span></p>
+                <p><strong>2020 Results:</strong> Trump 53.50% vs Biden 45.10% - first time since 2008 a Democrat reached 45% (Obama got 44.94%)</p>
+                <p><strong>2024 Consistency:</strong> Trump 53.36% vs Harris 45.22% - nearly identical Democratic share (45.10% vs 45.22%)</p>
+                <p><strong>Growth Centers:</strong> Graham, Burlington, and especially Mebane (I-40/I-85 corridor). Buc-ee's opening late 2026/early 2027 signals commercial growth</p>
+                <p><strong>Key Insight:</strong> Statistical similarity across cycles highlights persistent competitive trends in this swing county</p>
             </div>
-            <!-- Research Findings -->
-            <div class="findings-section">
-                <h4>🔍 Research Findings</h4>
-                
-                <div class="finding-card">
-                    <h5>Cabarrus County - Suburban Shift</h5>
-                    <p><strong>Competitive Trend:</strong> While still leaning Republican, Cabarrus has become significantly more competitive. <span class="metric">2020: R+9.4%</span> → <span class="metric">2024: R+7.7%</span></p>
-                    <p><strong>2020 Breakthrough:</strong> Trump 53.94% vs Biden 44.50% - first time since 2008 a Democrat cracked 40%</p>
-                    <p><strong>2024 Continuation:</strong> Trump 53.03% vs Harris 45.34%, maintaining the competitive trend</p>
-                    <p><strong>Demographics:</strong> Unaffiliated registration now surpasses both major parties. Fast-growing communities: Concord, Kannapolis, Harrisburg</p>
-                    <p><strong>Geography:</strong> Charlotte metro spillover driving suburban growth and political transformation</p>
-                </div>
-                
-                <div class="finding-card">
-                    <h5>Alamance County - Statistical Consistency</h5>
-                    <p><strong>Competitive Trend:</strong> Steady competitiveness with remarkably consistent Democratic performance. <span class="metric">2020: R+8.4%</span> → <span class="metric">2024: R+8.1%</span></p>
-                    <p><strong>2020 Results:</strong> Trump 53.50% vs Biden 45.10% - first time since 2008 a Democrat reached 45% (Obama got 44.94%)</p>
-                    <p><strong>2024 Consistency:</strong> Trump 53.36% vs Harris 45.22% - nearly identical Democratic share (45.10% vs 45.22%)</p>
-                    <p><strong>Growth Centers:</strong> Graham, Burlington, and especially Mebane (I-40/I-85 corridor). Buc-ee's opening late 2026/early 2027 signals commercial growth</p>
-                    <p><strong>Key Insight:</strong> Statistical similarity across cycles highlights persistent competitive trends in this swing county</p>
-                </div>
-                
-                <div class="finding-card">
-                    <h5>Regional Transformation</h5>
-                    <p><strong>Suburban Realignment:</strong> Both counties exemplify the transformation of formerly safe Republican areas into competitive battlegrounds</p>
-                    <p><strong>Unaffiliated Surge:</strong> In both counties, unaffiliated voters now outnumber Democrats and Republicans, creating volatile electoral dynamics</p>
-                    <p><strong>Geographic Advantage:</strong> Proximity to Charlotte, the Triad, and Triangle drives population growth and political moderation</p>
-                    <p><strong>Turnout Impact:</strong> Rising voter registration and turnout make these counties pivotal to statewide margins</p>
-                    <p><strong>National Pattern:</strong> These trends mirror broader suburban realignment across the United States</p>
-                </div>
-            </div>
-            
-            <!-- Ensure county details sidebar elements exist and are correctly placed inside sidebar-content -->
-            <div class="county-details" id="county-details" style="display: none;">
-              <h4 id="county-name">Select a County</h4>
-              <div id="county-info-content">
-                Click on any county to see detailed election results and competitiveness analysis.
-              </div>
+            <div class="finding-card">
+                <h5>Regional Transformation</h5>
+                <p><strong>Suburban Realignment:</strong> Both counties exemplify the transformation of formerly safe Republican areas into competitive battlegrounds</p>
+                <p><strong>Unaffiliated Surge:</strong> In both counties, unaffiliated voters now outnumber Democrats and Republicans, creating volatile electoral dynamics</p>
+                <p><strong>Geographic Advantage:</strong> Proximity to Charlotte, the Triad, and Triangle drives population growth and political moderation</p>
+                <p><strong>Turnout Impact:</strong> Rising voter registration and turnout make these counties pivotal to statewide margins</p>
+                <p><strong>National Pattern:</strong> These trends mirror broader suburban realignment across the United States</p>
             </div>
         </div>
     </div>
-    
-    <!-- Floating expand button (shown when sidebar is minimized) -->
     <button class="floating-expand-btn" onclick="toggleSidebar()" id="floating-expand-btn">+</button>
-    
     <div class="status-panel" id="status" style="display:none;">
-      <button id="status-exit" title="Close" style="position:absolute;top:10px;right:10px;padding:4px 10px;border-radius:6px;border:none;background:#eee;cursor:pointer;font-weight:bold;font-size:18px;">×</button>
-      <strong>Status:</strong> Loading map and data...
+        <button id="status-exit" title="Close" style="position:absolute;top:10px;right:10px;padding:4px 10px;border-radius:6px;border:none;background:#eee;cursor:pointer;font-weight:bold;font-size:18px;">×</button>
+        <strong>Status:</strong> Loading map and data...
     </div>
-    
-    <div class="legend" id="legend">
-        <div class="legend-header">
-            <h4>Political Categories</h4>
-            <button class="minimize-btn" onclick="toggleLegend()" id="legend-minimize-btn">−</button>
-        </div>
-        <div class="legend-content" id="legend-content">
-        <div class="legend-item"><div class="legend-color" style="background: #67000d;"></div>Annihilation Rep (40%+)</div>
-        <div class="legend-item"><div class="legend-color" style="background: #a50f15;"></div>Dominant Rep (30-40%)</div>
-        <div class="legend-item"><div class="legend-color" style="background: #cb181d;"></div>Stronghold Rep (20-30%)</div>
-        <div class="legend-item"><div class="legend-color" style="background: #ef3b2c;"></div>Safe Rep (10-20%)</div>
-        <div class="legend-item"><div class="legend-color" style="background: #fb6a4a;"></div>Likely Rep (5.5-10%)</div>
-        <div class="legend-item"><div class="legend-color" style="background: #fcae91;"></div>Lean Rep (1-5.5%)</div>
-        <div class="legend-item"><div class="legend-color" style="background: #fee8c8;"></div>Tilt Rep (0.5-1%)</div>
+</div>
+
+<!-- Legend Block (independent, not inside sidebar) -->
+<div class="legend" id="legend">
+    <div class="legend-header">
+        <h4>Political Categories</h4>
+        <button class="minimize-btn" onclick="toggleLegend()" id="legend-minimize-btn">−</button>
+    </div>
+    <div class="legend-content" id="legend-content">
+        <div class="legend-item"><div class="legend-color" style="background: #67000d;"></div>Annihilation Republican (40%+)</div>
+        <div class="legend-item"><div class="legend-color" style="background: #a50f15;"></div>Dominant Republican (30-40%)</div>
+        <div class="legend-item"><div class="legend-color" style="background: #cb181d;"></div>Stronghold Republican (20-30%)</div>
+        <div class="legend-item"><div class="legend-color" style="background: #ef3b2c;"></div>Safe Republican (10-20%)</div>
+        <div class="legend-item"><div class="legend-color" style="background: #fb6a4a;"></div>Likely Republican (5.5-10%)</div>
+        <div class="legend-item"><div class="legend-color" style="background: #fcae91;"></div>Lean Republican (1-5.5%)</div>
+        <div class="legend-item"><div class="legend-color" style="background: #fee8c8;"></div>Tilt Republican (0.5-1%)</div>
         <div class="legend-item"><div class="legend-color" style="background: #f7f7f7; border: 1px solid #999;"></div>Tossup (±0.5%)</div>
-        <div class="legend-item"><div class="legend-color" style="background: #e1f5fe;"></div>Tilt Dem (0.5-1%)</div>
-        <div class="legend-item"><div class="legend-color" style="background: #c6dbef;"></div>Lean Dem (1-5.5%)</div>
-        <div class="legend-item"><div class="legend-color" style="background: #9ecae1;"></div>Likely Dem (5.5-10%)</div>
-        <div class="legend-item"><div class="legend-color" style="background: #6baed6;"></div>Safe Dem (10-20%)</div>
-        <div class="legend-item"><div class="legend-color" style="background: #3182bd;"></div>Stronghold Dem (20-30%)</div>
-        <div class="legend-item"><div class="legend-color" style="background: #08519c;"></div>Dominant Dem (30-40%)</div>
-        <div class="legend-item"><div class="legend-color" style="background: #08306b;"></div>Annihilation Dem (40%+)</div>
-        </div>
+        <div class="legend-item"><div class="legend-color" style="background: #e1f5fe;"></div>Tilt Democratic (0.5-1%)</div>
+        <div class="legend-item"><div class="legend-color" style="background: #c6dbef;"></div>Lean Democratic (1-5.5%)</div>
+        <div class="legend-item"><div class="legend-color" style="background: #9ecae1;"></div>Likely Democratic (5.5-10%)</div>
+        <div class="legend-item"><div class="legend-color" style="background: #6baed6;"></div>Safe Democratic (10-20%)</div>
+        <div class="legend-item"><div class="legend-color" style="background: #3182bd;"></div>Stronghold Democratic (20-30%)</div>
+        <div class="legend-item"><div class="legend-color" style="background: #08519c;"></div>Dominant Democratic (30-40%)</div>
+        <div class="legend-item"><div class="legend-color" style="background: #08306b;"></div>Annihilation Democratic (40%+)</div>
     </div>
+</div>
 
     <script>
+                // Canvas swing arrow rendering
+                function resizeCanvas() {
+                    const canvas = document.getElementById('swingCanvas');
+                    canvas.width = window.innerWidth;
+                    canvas.height = window.innerHeight;
+                }
+                window.addEventListener('resize', resizeCanvas);
+                resizeCanvas();
+
+                function getCountyCentroid(countyName, countyGeojson) {
+    // Returns [x, y] for county centroid using turf.js
+    if (!countyGeojson || !countyGeojson.features) return [0, 0];
+    const feature = countyGeojson.features.find(f => (f.properties && f.properties.County && f.properties.County.toUpperCase() === countyName.toUpperCase()));
+    if (!feature) return [0, 0];
+    const centroid = turf.centroid(feature);
+    return centroid.geometry.coordinates;
+}
+
+function aggregateCountyArrows(arrows, countyGeojson) {
+    // Returns array of one arrow per county, using a mix of average, largest, and summary swing
+    const countyArrows = {};
+    arrows.forEach(arrow => {
+        if (!arrow.county) return;
+        if (!countyArrows[arrow.county]) countyArrows[arrow.county] = [];
+        countyArrows[arrow.county].push(arrow);
+    });
+    const result = [];
+    Object.entries(countyArrows).forEach(([county, arr]) => {
+        // Average swing
+        const avgAngle = arr.reduce((sum, a) => sum + a.angle, 0) / arr.length;
+        const avgLength = arr.reduce((sum, a) => sum + a.length, 0) / arr.length;
+        // Largest swing
+        const largest = arr.reduce((max, a) => a.length > max.length ? a : max, arr[0]);
+        // County summary (use color of majority swing)
+        const colorCounts = {};
+        arr.forEach(a => { colorCounts[a.color] = (colorCounts[a.color] || 0) + 1; });
+        const majorityColor = Object.keys(colorCounts).reduce((a, b) => colorCounts[a] > colorCounts[b] ? a : b);
+        // Centroid
+        const [x, y] = getCountyCentroid(county, countyGeojson);
+        result.push({
+            county,
+            x,
+            y,
+            angle: (avgAngle + largest.angle) / 2,
+            length: (avgLength + largest.length) / 2,
+            color: majorityColor
+        });
+    });
+    return result;
+}
+
+                function drawSwingArrows(arrows, countyGeojson) {
+                    const canvas = document.getElementById('swingCanvas');
+                    const ctx = canvas.getContext('2d');
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                    let arrowsToDraw;
+                    if (map.getZoom() >= 8) {
+                        // Aggregate one arrow per county using mix
+                        arrowsToDraw = aggregateCountyArrows(arrows, countyGeojson);
+                    } else {
+                        arrowsToDraw = arrows.slice(0, 100);
+                    }
+
+                    // Use requestAnimationFrame for smooth rendering
+                    function renderArrows(index) {
+                        if (index >= arrowsToDraw.length) return;
+                        const arrow = arrowsToDraw[index];
+                        ctx.save();
+                        ctx.translate(arrow.x, arrow.y);
+                        ctx.rotate(arrow.angle * Math.PI / 180);
+                        ctx.strokeStyle = arrow.color;
+                        ctx.lineWidth = map.getZoom() >= 8 ? 4 : 2;
+                        ctx.beginPath();
+                        ctx.moveTo(0, 0);
+                        ctx.lineTo(arrow.length, 0);
+                        if (map.getZoom() >= 8) {
+                            // Detailed arrow head (like ekenes.github.io)
+                            ctx.lineTo(arrow.length - 12, -8);
+                            ctx.moveTo(arrow.length, 0);
+                            ctx.lineTo(arrow.length - 12, 8);
+                        } else {
+                            // Simple arrow head for performance
+                            ctx.lineTo(arrow.length - 8, -6);
+                            ctx.moveTo(arrow.length, 0);
+                            ctx.lineTo(arrow.length - 8, 6);
+                        }
+                        ctx.stroke();
+                        ctx.restore();
+                        requestAnimationFrame(() => renderArrows(index + 1));
+                    }
+                    renderArrows(0);
+                }
        mapboxgl.accessToken = 'pk.eyJ1Ijoic2hhbWFyZGF2aXMiLCJhIjoiY21kcW8yeDB2MDhvbTJzb29qeGp1aDZmZCJ9.Zw_i6U-dL7_bEKRHTUh7yg'
         
         let loadingManager, analyticsManager;
@@ -832,27 +979,13 @@
         // Toggle sidebar minimize/expand
         function toggleSidebar() {
             const sidebar = document.getElementById('sidebar');
-            const btn = document.getElementById('sidebar-minimize-btn');
             const floatingBtn = document.getElementById('floating-expand-btn');
-            const mapElement = document.getElementById('map');
-            const body = document.body;
-            
             if (sidebar.classList.contains('minimized')) {
                 sidebar.classList.remove('minimized');
-                mapElement.classList.remove('sidebar-minimized');
-                body.classList.remove('sidebar-minimized');
-                btn.textContent = '−';
                 floatingBtn.style.display = 'none';
-                // Force map resize after sidebar shows
-                setTimeout(() => map.resize(), 300);
             } else {
                 sidebar.classList.add('minimized');
-                mapElement.classList.add('sidebar-minimized');
-                body.classList.add('sidebar-minimized');
-                btn.textContent = '+';
                 floatingBtn.style.display = 'flex';
-                // Force map resize after sidebar hides
-                setTimeout(() => map.resize(), 300);
             }
         }
         
@@ -891,7 +1024,7 @@
             const demPercent = (demTotal / totalVotes * 100);
             const repPercent = (repTotal / totalVotes * 100);
             const margin = Math.abs(demPercent - repPercent);
-            const winner = demPercent > repPercent ? 'Democratic' : 'Republican';
+            const winner = demPercent > repPercent ? 'Democratic' : 'Republican'; // Already uses full labels
             const winnerPercent = Math.max(demPercent, repPercent);
             const loserPercent = Math.min(demPercent, repPercent);
             
@@ -1012,7 +1145,7 @@
                     source: 'counties',
                     paint: {
                         'fill-color': '#e0e0e0',
-                        'fill-opacity': 0.7
+                        'fill-opacity': 0.4
                     }
                 });
                 
@@ -1159,11 +1292,15 @@
             } else if (contestType === 'lt') {
                 contestType = 'lt_governor';
             } else if (contestType === 'commissioner') {
-                // For commissioner races, include the department
                 contestType = contestParts[0] + '_' + contestParts[1];
-            } else if (contestType === 'state') {
-                // For state auditor races
+            } else if (contestType === 'state' || contestType === 'auditor' || contestType === 'auditor_state' || contestType === 'stateauditor') {
                 contestType = 'state_auditor';
+            } else if (contestType === 'treasurer') {
+                contestType = 'treasurer';
+            } else if (contestType === 'secretary') {
+                contestType = 'secretary_of_state';
+            } else if (contestType === 'superintendent') {
+                contestType = 'superintendent_instruction';
             }
             
             console.log('Contest type:', contestType, 'from value:', contest);
@@ -1227,7 +1364,7 @@
             // Aggregate by county
             const countyData = {};
             let categoryCount = {};
-            
+
             Object.values(results).forEach(result => {
                 const county = result.county;
                 if (!countyData[county]) {
@@ -1240,12 +1377,12 @@
                         categories: {}
                     };
                 }
-                
+
                 countyData[county].totalVotes += result.total_votes;
                 countyData[county].demTotal += result.dem_votes;
                 countyData[county].repTotal += result.rep_votes;
                 countyData[county].precinctCount++;
-                
+
                 if (result.competitiveness && result.competitiveness.color) {
                     countyData[county].colors.push(result.competitiveness.color);
                     const cat = result.competitiveness.code;
@@ -1253,45 +1390,50 @@
                     categoryCount[cat] = (categoryCount[cat] || 0) + 1;
                 }
             });
-            
+
+            // Debug output: log county names and vote totals
+            console.log('County vote totals:');
+            Object.entries(countyData).forEach(([county, data]) => {
+                console.log(`${county}: demTotal=${data.demTotal}, repTotal=${data.repTotal}, totalVotes=${data.totalVotes}`);
+            });
+
             // Function to calculate county-level competitiveness
             function getCountyCompetitiveness(demVotes, repVotes) {
                 const totalTwoParty = demVotes + repVotes;
                 if (totalTwoParty === 0) return { color: '#e0e0e0', category: 'No Data', code: 'NO_DATA' };
                 
                 const margin = Math.abs(repVotes - demVotes) / totalTwoParty * 100;
-                const winner = repVotes > demVotes ? 'REP' : 'DEM';
+                const winner = repVotes > demVotes ? 'Republican' : 'Democratic';
                 
                 let category, code, color;
-                
                 if (margin >= 40) {
-                    category = winner === 'REP' ? 'Republican Annihilation' : 'Democratic Annihilation';
-                    code = winner === 'REP' ? 'R_ANNIHILATION' : 'D_ANNIHILATION';
-                    color = winner === 'REP' ? '#67000d' : '#08306b';  // Darkest
+                    category = `Annihilation ${winner}`;
+                    code = winner === 'Republican' ? 'R_ANNIHILATION' : 'D_ANNIHILATION';
+                    color = winner === 'Republican' ? '#67000d' : '#08306b';
                 } else if (margin >= 30) {
-                    category = winner === 'REP' ? 'Republican Dominant' : 'Democratic Dominant';
-                    code = winner === 'REP' ? 'R_DOMINANT' : 'D_DOMINANT';
-                    color = winner === 'REP' ? '#a50f15' : '#08519c';  // Very dark
+                    category = `Dominant ${winner}`;
+                    code = winner === 'Republican' ? 'R_DOMINANT' : 'D_DOMINANT';
+                    color = winner === 'Republican' ? '#a50f15' : '#08519c';
                 } else if (margin >= 20) {
-                    category = winner === 'REP' ? 'Republican Stronghold' : 'Democratic Stronghold';
-                    code = winner === 'REP' ? 'R_STRONGHOLD' : 'D_STRONGHOLD';
-                    color = winner === 'REP' ? '#cb181d' : '#3182bd';  // Dark
+                    category = `Stronghold ${winner}`;
+                    code = winner === 'Republican' ? 'R_STRONGHOLD' : 'D_STRONGHOLD';
+                    color = winner === 'Republican' ? '#cb181d' : '#3182bd';
                 } else if (margin >= 10) {
-                    category = winner === 'REP' ? 'Republican Safe' : 'Democratic Safe';
-                    code = winner === 'REP' ? 'R_SAFE' : 'D_SAFE';
-                    color = winner === 'REP' ? '#ef3b2c' : '#6baed6';
+                    category = `Safe ${winner}`;
+                    code = winner === 'Republican' ? 'R_SAFE' : 'D_SAFE';
+                    color = winner === 'Republican' ? '#ef3b2c' : '#6baed6';
                 } else if (margin >= 5.5) {
-                    category = winner === 'REP' ? 'Republican Likely' : 'Democratic Likely';
-                    code = winner === 'REP' ? 'R_LIKELY' : 'D_LIKELY';
-                    color = winner === 'REP' ? '#fb6a4a' : '#9ecae1';
+                    category = `Likely ${winner}`;
+                    code = winner === 'Republican' ? 'R_LIKELY' : 'D_LIKELY';
+                    color = winner === 'Republican' ? '#fb6a4a' : '#9ecae1';
                 } else if (margin >= 1) {
-                    category = winner === 'REP' ? 'Republican Lean' : 'Democratic Lean';
-                    code = winner === 'REP' ? 'R_LEAN' : 'D_LEAN';
-                    color = winner === 'REP' ? '#fcae91' : '#c6dbef';
+                    category = `Lean ${winner}`;
+                    code = winner === 'Republican' ? 'R_LEAN' : 'D_LEAN';
+                    color = winner === 'Republican' ? '#fcae91' : '#c6dbef';
                 } else if (margin >= 0.5) {
-                    category = winner === 'REP' ? 'Republican Tilt' : 'Democratic Tilt';
-                    code = winner === 'REP' ? 'R_TILT' : 'D_TILT';
-                    color = winner === 'REP' ? '#fee8c8' : '#e1f5fe';
+                    category = `Tilt ${winner}`;
+                    code = winner === 'Republican' ? 'R_TILT' : 'D_TILT';
+                    color = winner === 'Republican' ? '#fee8c8' : '#e1f5fe';
                 } else {
                     category = 'Tossup';
                     code = 'TOSSUP';
@@ -1341,7 +1483,7 @@
             
             // Apply colors to county layer
             map.setPaintProperty('county-fill', 'fill-color', colorExpression);
-            map.setPaintProperty('county-fill', 'fill-opacity', 0.8);
+            map.setPaintProperty('county-fill', 'fill-opacity', 0.55);
             
             if (currentMode === 'county') {
                 updateStatus(`✅ ${contest} ${year} applied! ${coloredCount} counties colored by county-level results.`);
@@ -1475,6 +1617,8 @@
             
             const previousCountyResults = Object.values(previousResults).filter(r => 
                 countyNameMap[r.county.toUpperCase()] === county
+           
+           
             );
             
             if (currentCountyResults.length === 0 || previousCountyResults.length === 0) {
@@ -1558,30 +1702,40 @@
             counties.forEach(county => {
                 const countyName = county.properties.County;
                 const swingData = calculateSwing(currentElectionResults, previousResults, countyName);
-                
                 if (swingData && Math.abs(swingData.swing) >= 0.5) { // Only show arrows for swings >= 0.5%
                     // Get county centroid
                     const coordinates = turf.centroid(county.geometry).geometry.coordinates;
                     const point = map.project(coordinates);
-                    
-                    // Create arrow element
-                    const arrow = document.createElement('div');
-                    arrow.className = 'swing-arrow ' + (swingData.swing > 0 ? 'republican' : 'democratic');
-                    
-                    // Scale arrow size based on swing magnitude (min 1x, max 3x)
-                    const scale = Math.min(3, 1 + (Math.abs(swingData.swing) / 10));
-                    const rotate = swingData.swing > 0 ? 0 : 180; // Right for Republican swing, Left for Democratic swing
-                    arrow.style.transform = 'translate(-50%, -50%) rotate(' + rotate + 'deg) scale(' + scale + ')';
-                    
-                    // Position the arrow at county center
-                    arrow.style.left = point.x + 'px';
-                    arrow.style.top = point.y + 'px';
-                    
+                    // Create SVG arrow element for sharper visuals
+                    const arrowSVG = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+                    arrowSVG.setAttribute('width', 16);
+                    arrowSVG.setAttribute('height', 16);
+                    arrowSVG.setAttribute('viewBox', '0 0 32 32');
+                    arrowSVG.style.position = 'absolute';
+                    arrowSVG.style.left = point.x + 'px';
+                    arrowSVG.style.top = point.y + 'px';
+                    arrowSVG.style.zIndex = 1001;
+                    arrowSVG.style.pointerEvents = 'none';
+                    arrowSVG.style.filter = 'drop-shadow(0px 0px 2px rgba(0,0,0,0.3))';
+                    // Scale arrow size based on swing magnitude (min 0.5x, max 2x)
+                    const scale = Math.min(2, 0.5 + (Math.abs(swingData.swing) / 10));
+                    const rotate = swingData.swing > 0 ? 0 : 180;
+                    arrowSVG.style.transform = `translate(-50%, -50%) rotate(${rotate}deg) scale(${scale})`;
+                    // Arrow color
+                    const color = swingData.swing > 0 ? '#e74c3c' : '#3498db';
+                    // Create arrow path (simple arrow)
+                    const arrowPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                    arrowPath.setAttribute('d', 'M4 16 L28 16 M20 8 L28 16 L20 24');
+                    arrowPath.setAttribute('stroke', color);
+                    arrowPath.setAttribute('stroke-width', '3');
+                                       arrowPath.setAttribute('fill', 'none');
+                    arrowPath.setAttribute('stroke-linecap', 'round');
+                    arrowPath.setAttribute('stroke-linejoin', 'round');
+                    arrowSVG.appendChild(arrowPath);
                     // Add tooltip
-                    arrow.title = countyName + ': ' + (swingData.swing > 0 ? 'R' : 'D') + '+' + Math.abs(swingData.swing).toFixed(1) + '%';
-                    
-                    document.body.appendChild(arrow);
-                    swingArrows.push(arrow);
+                    arrowSVG.title = countyName + ': ' + (swingData.swing > 0 ? 'R' : 'D') + '+' + Math.abs(swingData.swing).toFixed(1) + '%';
+                    document.body.appendChild(arrowSVG);
+                    swingArrows.push(arrowSVG);
                 }
             });
             
@@ -1609,11 +1763,177 @@
             }
         });
         
+        // Canvas-based swing arrow rendering
+        function drawSwingArrowsCanvas(arrows) {
+            const canvas = document.getElementById('swing-arrow-canvas');
+            if (!canvas) return;
+            const mapDiv = document.getElementById('map');
+            canvas.width = mapDiv.offsetWidth;
+            canvas.height = mapDiv.offsetHeight;
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            arrows.forEach(arrow => {
+                const {x, y, swing, magnitude, countyName} = arrow;
+                ctx.save();
+                ctx.translate(x, y);
+                ctx.rotate(swing > 0 ? 0 : Math.PI); // Right for R, left for D
+                // Arrow color
+                ctx.strokeStyle = swing > 0 ? '#dc2626' : '#1e40af';
+                ctx.lineWidth = 2 + Math.min(6, magnitude / 2);
+                // Draw arrow shaft
+                ctx.beginPath();
+                ctx.moveTo(0, 0);
+                ctx.lineTo(30 + magnitude * 2, 0);
+                ctx.stroke();
+                // Draw arrow head
+                ctx.beginPath();
+                ctx.moveTo(30 + magnitude * 2, 0);
+                ctx.lineTo(30 + magnitude * 2 - 8, -6);
+                ctx.lineTo(30 + magnitude * 2 - 8, 6);
+                ctx.closePath();
+                ctx.fillStyle = ctx.strokeStyle;
+                ctx.fill();
+                ctx.restore();
+            });
+        }
+
+        function showSwingArrowsCanvas() {
+            // Get previous election selection
+            const compareValue = document.getElementById('compare-election').value;
+            if (!compareValue || !currentElectionResults) {
+                updateStatus('❌ Please select both a current and comparison election');
+                return;
+            }
+            // Contest key parsing (same as patched logic)
+            const contestParts = compareValue.split('_');
+            let contestType = contestParts[0];
+            const yearMatch = compareValue.match(/_(\d{4})_/);
+            if (!yearMatch) {
+                updateStatus('❌ Invalid comparison election selected');
+                return;
+            }
+            const year = yearMatch[1];
+            if (contestType === 'us') {
+                contestType = 'us_senate';
+            } else if (contestType === 'attorney') {
+                contestType = 'attorney_general';
+            } else if (contestType === 'lt') {
+                contestType = 'lt_governor';
+            } else if (contestType === 'commissioner') {
+                contestType = contestParts[0] + '_' + contestParts[1];
+            } else if (contestType === 'state') {
+                contestType = 'state_auditor';
+            } else if (contestType === 'secretary') {
+                contestType = 'secretary_of_state';
+            } else if (contestType === 'treasurer') {
+                contestType = 'treasurer';
+            } else if (contestType === 'auditor') {
+                contestType = 'state_auditor';
+            }
+            if (!electionData.results_by_year[year] || 
+                !electionData.results_by_year[year][contestType] ||
+                !electionData.results_by_year[year][contestType][compareValue]) {
+                updateStatus('❌ No data available for comparison election');
+                return;
+            }
+            const previousResults = electionData.results_by_year[year][contestType][compareValue].results;
+            // Get all counties from the map source
+            const counties = map.getSource('counties')._data.features;
+            let arrows = [];
+            counties.forEach(function(county) {
+                const countyName = county.properties.County;
+                // Calculate swing
+                const swingData = calculateSwing(currentElectionResults, previousResults, countyName);
+                if (swingData && Math.abs(swingData.swing) >= 0.5) {
+                    // Get county centroid
+                    const coordinates = turf.centroid(county.geometry).geometry.coordinates;
+                    const point = map.project(coordinates);
+                    arrows.push({
+                        x: point.x,
+                        y: point.y,
+                        swing: swingData.swing,
+                        magnitude: Math.abs(swingData.swing),
+                        countyName: countyName
+                    });
+                }
+            });
+            drawSwingArrowsCanvas(arrows);
+            updateStatus('✅ Showing party swing arrows (canvas)');
+        }
+
+        function hideSwingArrowsCanvas() {
+            const canvas = document.getElementById('swing-arrow-canvas');
+            if (canvas) {
+                const ctx = canvas.getContext('2d');
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+            }
+            updateStatus('✅ Removed swing arrows');
+        }
+
+        // Redraw arrows on map move
+        map.on('move', function() {
+            if (document.getElementById('swing-arrow-canvas')) {
+                showSwingArrowsCanvas();
+            }
+        });
+        
+        // Add canvas overlay to DOM
+        window.addEventListener('DOMContentLoaded', function() {
+            if (!document.getElementById('swing-arrow-canvas')) {
+                const canvas = document.createElement('canvas');
+                canvas.id = 'swing-arrow-canvas';
+                canvas.style.position = 'absolute';
+                canvas.style.top = '0';
+                canvas.style.left = '0';
+                canvas.style.width = '100vw';
+                canvas.style.height = '100vh';
+                canvas.style.pointerEvents = 'none';
+                canvas.style.zIndex = '999';
+                document.body.appendChild(canvas);
+            }
+        });
+        
+        document.addEventListener('DOMContentLoaded', function() {
+    const sidebar = document.getElementById('sidebar');
+    const floatingBtn = document.getElementById('floating-expand-btn');
+    sidebar.classList.add('minimized');
+    floatingBtn.style.display = 'flex';
+});
+
+// JS-only minimize button logic
+function toggleSidebar() {
+  const sidebar = document.getElementById('sidebar');
+  const btn = document.getElementById('sidebar-minimize-btn');
+  if (sidebar.classList.contains('minimized')) {
+    sidebar.classList.remove('minimized');
+    btn.textContent = '−';
+  } else {
+    sidebar.classList.add('minimized');
+    btn.textContent = '+';
+  }
+}
+
+// On load, set sidebar to minimized and button to +
+document.addEventListener('DOMContentLoaded', function() {
+  const sidebar = document.getElementById('sidebar');
+  const btn = document.getElementById('sidebar-minimize-btn');
+  sidebar.classList.add('minimized');
+  btn.textContent = '+';
+});
+
+// Show sidebar when a county is clicked
+function showCountyDetails(countyName) {
+  const sidebar = document.getElementById('sidebar');
+  sidebar.classList.remove('minimized');
+  // ...existing code for showing county details...
+}
+        
         // Unified function to show county details in sidebar
 function showCountyDetails(countyName) {
     const countyDetails = document.getElementById('county-details');
     const countyNameElement = document.getElementById('county-name');
-    const countyInfoContent = document.getElementById('county-info-content');
+       const countyInfoContent = document.getElementById('county-info-content');
     if (!countyDetails || !countyNameElement || !countyInfoContent) {
         console.error('County sidebar elements not found');
         return;
@@ -1659,21 +1979,21 @@ function showCountyDetails(countyName) {
             let competitiveness;
             const actualMarginPct = parseFloat(marginPct);
             if (actualMarginPct >= 40) {
-                competitiveness = winner === 'Republican' ? "Annihilation Rep" : "Annihilation Dem";
+                competitiveness = winner === 'Republican' ? "Annihilation Republican" : "Annihilation Democratic";
             } else if (actualMarginPct >= 30) {
-                competitiveness = winner === 'Republican' ? "Dominant Rep" : "Dominant Dem";
+                competitiveness = winner === 'Republican' ? "Dominant Republican" : "Dominant Democratic";
             } else if (actualMarginPct >= 20) {
-                competitiveness = winner === 'Republican' ? "Stronghold Rep" : "Stronghold Dem";
+                competitiveness = winner === 'Republican' ? "Stronghold Republican" : "Stronghold Democratic";
             } else if (actualMarginPct >= 10) {
-                competitiveness = winner === 'Republican' ? "Safe Rep" : "Safe Dem";
+                competitiveness = winner === 'Republican' ? "Safe Republican" : "Safe Democratic";
             } else if (actualMarginPct >= 5.5) {
-                competitiveness = winner === 'Republican' ? "Likely Rep" : "Likely Dem";
+                competitiveness = winner === 'Republican' ? "Likely Republican" : "Likely Democratic";
             } else if (actualMarginPct >= 1) {
-                competitiveness = winner === 'Republican' ? "Lean Rep" : "Lean Dem";
+                competitiveness = winner === 'Republican' ? "Lean Republican" : "Lean Democratic";
             } else if (actualMarginPct >= 0.5) {
-                competitiveness = winner === 'Republican' ? "Tilt Rep" : "Tilt Dem";
+                competitiveness = winner === 'Republican' ? "Tilt Republican" : "Tilt Democratic";
             } else {
-                competitiveness = "Tossup";
+                    competitiveness = `Tossup (${winner} win)`;
             }
             let compColor = '#6b7280';
             if (competitiveness.includes('Rep')) {
